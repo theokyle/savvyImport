@@ -28,15 +28,20 @@ def import_activity(path, join_path, limit=None, dry_run=False):
     operations = []
     skipped_rows = 0
 
+    contacts = {
+        str(c["externalId"]): c["_id"]
+        for c in contacts_collection.find({}, {"externalId": 1})
+    }
+
     for _, row in merged.iterrows():
-        contact_vid = row.get("VId")  
+        contact_vid = str(row.get("VId", "")).strip()
         if not contact_vid:
             print("⚠️ No contact vid in join record, skipping.")
             skipped_rows += 1
             continue
 
-        contact = contacts_collection.find_one({"externalId": contact_vid})
-        if not contact:
+        contact_id = contacts.get(contact_vid)
+        if not contact_id:
             print(f"⚠️ Contact not found for vid {contact_vid}, skipping.")
             skipped_rows += 1
             continue
@@ -46,7 +51,7 @@ def import_activity(path, join_path, limit=None, dry_run=False):
             case "Call":
                 activity_doc = {
                     "type": row.get("hs_activity_type", "Call").strip(),
-                    "contact": contact["_id"],
+                    "contact": contact_id,
                     "author": row.get("hs_created_by_user_id", None),
                     "subject": row.get("hs_call_title", row.get("hs_call_summary", "")).strip(),
                     "content": row.get("hs_call_body", "").strip(),
@@ -69,7 +74,7 @@ def import_activity(path, join_path, limit=None, dry_run=False):
             case "Meeting":
                 activity_doc = {
                     "type": row.get("hs_activity_type", "MEETING").strip(),   
-                    "contact": contact["_id"],                                 
+                    "contact": contact_id,                                 
                     "author": row.get("hs_created_by_user_id", None),          
                     "subject": row.get("hs_meeting_title", "").strip(),       
                     "content": row.get("hs_meeting_body", "").strip(),         
@@ -108,7 +113,7 @@ def import_activity(path, join_path, limit=None, dry_run=False):
             case "Email":
                 activity_doc = {
                     "type": row.get("hs_activity_type", "EMAIL").strip(),          
-                    "contact": contact["_id"],                                      
+                    "contact": contact_id,                                      
                     "author": row.get("hs_created_by_user_id", None),               
                     "subject": row.get("hs_email_subject", "").strip(),            
                     "content": row.get("hs_body_preview", "").strip(),            
@@ -151,7 +156,7 @@ def import_activity(path, join_path, limit=None, dry_run=False):
             case "Note":
                 activity_doc = {
                     "type": row.get("hs_activity_type", "NOTE").strip(),  
-                    "contact": contact["_id"],                             
+                    "contact": contact_id,                             
                     "author": row.get("hs_created_by_user_id", None),       
                     "subject": None,                                        
                     "content": row.get("hs_note_body", "").strip(),         
@@ -185,7 +190,7 @@ def import_activity(path, join_path, limit=None, dry_run=False):
             case "Task":
                 activity_doc = {
                     "type": row.get("hs_activity_type", "TASK").strip(),    
-                    "contact": contact["_id"],                                   
+                    "contact": contact_id,                                   
                     "author": row.get("hs_created_by_user_id", None),            
                     "subject": row.get("hs_task_subject", "").strip(),           
                     "content": row.get("hs_task_body", "").strip(),              
