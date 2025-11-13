@@ -1,12 +1,12 @@
 import os
 import pandas as pd
 from datetime import datetime
-from pymongo import MongoClient, InsertOne
+from pymongo import MongoClient, UpdateOne
 from dateutil import parser as dateparser
 from normalize import parse_date
 
 
-def import_activity(path, join_path, limit=None, dry_run=False):
+def import_activity(type, path, join_path, limit=None, dry_run=False):
 
     print(f"📥 Loading activities from: {path}")
     print(f"🔗 Joining with contact data from: {join_path}")
@@ -47,8 +47,8 @@ def import_activity(path, join_path, limit=None, dry_run=False):
             continue
 
         engagement_type = row['engagement_type'].strip().lower()
-        match row['engagement_type']:
-            case "Call":
+        match engagement_type:
+            case "call":
                 activity_doc = {
                     "type": row.get("hs_activity_type", "Call").strip(),
                     "contact": contact_id,
@@ -57,6 +57,7 @@ def import_activity(path, join_path, limit=None, dry_run=False):
                     "content": row.get("hs_call_body", "").strip(),
                     "status": row.get("hs_call_status", "Completed").strip(),
                     "dueDate": parse_date(row.get("hs_createdate")),
+                    "externalId": row.get("EngagementId"),
                     "source": "HubSpot",
                     "metadata": {
                         "duration": row.get("hs_call_duration"),
@@ -71,7 +72,7 @@ def import_activity(path, join_path, limit=None, dry_run=False):
                         "lastModified": parse_date(row.get("hs_lastmodifieddate")),
                     }
                 }
-            case "Meeting":
+            case "meeting":
                 activity_doc = {
                     "type": row.get("hs_activity_type", "MEETING").strip(),   
                     "contact": contact_id,                                 
@@ -80,7 +81,8 @@ def import_activity(path, join_path, limit=None, dry_run=False):
                     "content": row.get("hs_meeting_body", "").strip(),         
                     "status": row.get("hs_meeting_outcome", "Scheduled").strip(), 
                     "dueDate": parse_date(row.get("hs_meeting_start_time")),  
-                    "endDate": parse_date(row.get("hs_meeting_end_time")),     
+                    "endDate": parse_date(row.get("hs_meeting_end_time")),  
+                    "externalId": row.get("EngagementId"),   
                     "source": "HubSpot",
                     "metadata": {
                         "engagementId": row.get("EngagementId"),
@@ -110,7 +112,7 @@ def import_activity(path, join_path, limit=None, dry_run=False):
                         "accessibleTeamIds": row.get("hs_all_accessible_team_ids"),
                     }
                 }
-            case "Email":
+            case "email":
                 activity_doc = {
                     "type": row.get("hs_activity_type", "EMAIL").strip(),          
                     "contact": contact_id,                                      
@@ -118,10 +120,10 @@ def import_activity(path, join_path, limit=None, dry_run=False):
                     "subject": row.get("hs_email_subject", "").strip(),            
                     "content": row.get("hs_body_preview", "").strip(),            
                     "status": row.get("hs_email_status", "Sent").strip(),           
-                    "dueDate": parse_date(row.get("hs_createdate")),                
+                    "dueDate": parse_date(row.get("hs_createdate")),  
+                    "externalId": row.get("EngagementId"),              
                     "source": "HubSpot",
                     "metadata": {
-                        "engagementId": row.get("EngagementId"),
                         "vid": row.get("vid"),
                         "objectId": row.get("hs_object_id"),
                         "direction": row.get("hs_email_direction"),
@@ -153,7 +155,7 @@ def import_activity(path, join_path, limit=None, dry_run=False):
                         "readOnly": row.get("hs_read_only"),
                     }
                 }
-            case "Note":
+            case "note":
                 activity_doc = {
                     "type": row.get("hs_activity_type", "NOTE").strip(),  
                     "contact": contact_id,                             
@@ -161,10 +163,10 @@ def import_activity(path, join_path, limit=None, dry_run=False):
                     "subject": None,                                        
                     "content": row.get("hs_note_body", "").strip(),         
                     "status": "Completed",                                  
-                    "dueDate": parse_date(row.get("hs_createdate")),        
+                    "dueDate": parse_date(row.get("hs_createdate")),  
+                    "externalId": row.get("EngagementId"),      
                     "source": "HubSpot",
                     "metadata": {
-                        "engagementId": row.get("EngagementId"),
                         "vid": row.get("vid"),
                         "objectId": row.get("hs_object_id"),
                         "internalNotes": row.get("hs_note_body"),
@@ -187,7 +189,7 @@ def import_activity(path, join_path, limit=None, dry_run=False):
                         "updatedBy": row.get("hs_updated_by_user_id"),
                     }
                 }
-            case "Task":
+            case "task":
                 activity_doc = {
                     "type": row.get("hs_activity_type", "TASK").strip(),    
                     "contact": contact_id,                                   
@@ -195,10 +197,10 @@ def import_activity(path, join_path, limit=None, dry_run=False):
                     "subject": row.get("hs_task_subject", "").strip(),           
                     "content": row.get("hs_task_body", "").strip(),              
                     "status": "Completed" if row.get("hs_task_is_completed") == "true" else "Pending", 
-                    "dueDate": parse_date(row.get("hs_start_date")),             
+                    "dueDate": parse_date(row.get("hs_start_date")),
+                    "externalId": row.get("EngagementId"),             
                     "source": "HubSpot",
                     "metadata": {
-                        "engagementId": row.get("EngagementId"),
                         "vid": row.get("vid"),
                         "objectId": row.get("hs_object_id"),
                         "pipeline": row.get("hs_pipeline"),
@@ -234,8 +236,12 @@ def import_activity(path, join_path, limit=None, dry_run=False):
                         "ownerId": row.get("hubspot_owner_id"),
                     }
                 }
+            case _:
+                print(f"⚠️ Unknown engagement type '{engagement_type}', skipping.")
+                skipped_rows += 1
+                continue
 
-        operations.append(InsertOne(activity_doc))
+        operations.append(UpdateOne({"externalId": row.get("EngagementId")}, {"$set": activity_doc}, upsert=True))
 
     if dry_run:
         print(f"🧪 Dry run complete — {len(operations)} activities prepared, {skipped_rows} skipped.")

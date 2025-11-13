@@ -3,7 +3,7 @@ import pandas as pd
 from pymongo import MongoClient, UpdateOne
 from normalize import normalize_email, normalize_phone, parse_date, normalize_bool
 
-def import_contact(csv_path, limit, dry_run):
+def import_contact(csv_path="./data/Contact.csv", limit = None, dry_run = False):
     if not os.path.exists(csv_path):
         raise FileNotFoundError(f"CSV file not found: {csv_path}")
     print(f"Loading CSV from {csv_path}...")
@@ -14,7 +14,7 @@ def import_contact(csv_path, limit, dry_run):
 
     client = MongoClient(os.getenv("MONGODB"))
     db = client[os.getenv("DB_NAME")]
-    contacts = db["Contact"]
+    contacts = db["contacts"]
 
     operations = []
     skipped_rows = 0
@@ -45,15 +45,17 @@ def transform_row(row):
     first = row.get("firstname", "").strip()
     last = row.get("lastname", "").strip()
     email = normalize_email(row.get("email"))
-    if not email or not first or not last:
-        return None  # Skip invalid
+    if not first and not last:
+        displayName = email
+    else:
+        displayName = f"{first} {last}".strip()
 
     location = ", ".join(filter(None, [row.get("city", "").strip(), row.get("state", "").strip()]))
 
     return {
         "firstName": first,
         "lastName": last,
-        "displayName": f"{first} {last}".strip(),
+        "displayName": displayName,
         "email": email,
         "phone": normalize_phone(row.get("phone") or row.get("mobilephone")),
         "type": row.get("contact_type", "Student").strip() or "Student",
