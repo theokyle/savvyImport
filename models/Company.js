@@ -8,12 +8,6 @@ const companySchema = new Schema(
       trim: true,
     },
 
-    domain: {
-      type: String,
-      trim: true,
-      lowercase: true,
-    },
-
     website: {
       type: String,
       trim: true,
@@ -24,20 +18,12 @@ const companySchema = new Schema(
       trim: true,
     },
 
-    about: {
-      type: String,
-      trim: true,
-    },
-
     description: {
       type: String,
       trim: true,
     },
 
-    foundedYear: Number,
     numberOfEmployees: Number,
-    annualRevenue: Number,
-    revenueCurrency: { type: String, trim: true },
 
     address: {
       line1: String,
@@ -65,7 +51,7 @@ const companySchema = new Schema(
     },
 
     // --- HubSpot Metadata ---
-    meta: {
+    metadata: {
       companyId: String,
       createdAt: Date,
       updatedAt: Date,

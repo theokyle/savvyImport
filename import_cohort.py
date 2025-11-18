@@ -1,6 +1,7 @@
 import os
 import pandas as pd
 from pymongo import UpdateOne, MongoClient
+from paths import COHORT_CSV
 
 
 def detect_cohort_type(cohort):
@@ -17,7 +18,8 @@ def detect_cohort_type(cohort):
     return "FullStack"  # fallback if none matched
 
 
-def import_cohort(csv_path="./data/Cohorts.csv", limit=None, dry_run=False):
+def import_cohort(limit=None, dry_run=False):
+    csv_path = COHORT_CSV
     if not os.path.exists(csv_path):
         raise FileNotFoundError(f"CSV file not found: {csv_path}")
     print(f"Loading CSV from {csv_path}...")
@@ -28,7 +30,7 @@ def import_cohort(csv_path="./data/Cohorts.csv", limit=None, dry_run=False):
 
     client = MongoClient(os.getenv("MONGODB"))
     db = client[os.getenv("DB_NAME")]
-    cohorts = db["cohorts"]
+    cohorts = db["cohort"]
 
     operations = []
     skipped = 0
@@ -47,7 +49,7 @@ def import_cohort(csv_path="./data/Cohorts.csv", limit=None, dry_run=False):
 
         # HubSpot metadata storage
         metadata = {
-            "objectId": str(row.get("hs_object_id")),
+            "objectId": row.get("hs_object_id"),
             "createdAt": pd.to_datetime(row.get("hs_createdate"), errors="coerce"),
             "updatedAt": pd.to_datetime(row.get("hs_lastmodifieddate"), errors="coerce"),
             "ownerId": row.get("hubspot_owner_id"),

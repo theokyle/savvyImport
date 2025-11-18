@@ -1,255 +1,176 @@
 import os
 import pandas as pd
-from datetime import datetime
 from pymongo import MongoClient, UpdateOne
-from dateutil import parser as dateparser
 from normalize import parse_date
+import numpy as np
+from paths import ENGAGEMENT_PATHS, ENGAGEMENT_JOIN_PATHS
 
+def import_activity(limit=None, dry_run=False):
+    """
+    Import multiple engagement CSVs safely, aggregating contacts, deals, and companies per EngagementId,
+    and including type-specific fields. Limit applies per engagement type.
+    """
+    print("📥 Loading engagement data…")
 
-def import_activity(type, path, join_path, limit=None, dry_run=False):
+    # Load join tables and aggregate to lists to avoid duplicates
+    join_paths = ENGAGEMENT_JOIN_PATHS
 
-    print(f"📥 Loading activities from: {path}")
-    print(f"🔗 Joining with contact data from: {join_path}")
+    df_contact_assoc = pd.read_csv(join_paths['contact'], dtype=str).fillna("")
+    df_contact_assoc = df_contact_assoc.groupby("EngagementId")["VId"].agg(list).reset_index()
 
-    df_activities = pd.read_csv(path, dtype=str).fillna("")
-    df_join = pd.read_csv(join_path, dtype=str).fillna("")
-    merged = pd.merge(df_activities, df_join, on="EngagementId", how="left")
+    df_deal_assoc = pd.read_csv(join_paths['deal'], dtype=str).fillna("")
+    df_deal_assoc = df_deal_assoc.groupby("EngagementId")["DealId"].agg(list).reset_index()
 
-    if limit:
-        merged = merged.head(limit)
+    df_company_assoc = pd.read_csv(join_paths['company'], dtype=str).fillna("")
+    df_company_assoc = df_company_assoc.groupby("EngagementId")["CompanyId"].agg(list).reset_index()
 
-    print(f"✅ Merged {len(merged)} records")
-
+    # Mongo setup
     client = MongoClient(os.getenv("MONGODB"))
     db = client[os.getenv("DB_NAME")]
-    contacts_collection = db["Contact"]
-    activities_collection = db["Activity"]
+    contacts_collection = db["contact"]
+    companies_collection = db["company"]
+    processes_collection = db["process"]
+    activities_collection = db["activity"]
+
+    # Preload DB objects
+    contacts = {str(c["externalId"]): c["_id"] for c in contacts_collection.find({}, {"externalId": 1})}
+    companies = {str(c["externalId"]): c["_id"] for c in companies_collection.find({}, {"externalId": 1})}
+    processes = {str(p["externalId"]): p["_id"] for p in processes_collection.find({}, {"externalId": 1})}
 
     operations = []
     skipped_rows = 0
 
-    contacts = {
-        str(c["externalId"]): c["_id"]
-        for c in contacts_collection.find({}, {"externalId": 1})
-    }
+    # Process each engagement CSV individually
+    for path in ENGAGEMENT_PATHS:
+        print(f"📂 Processing {path}…")
+        df_engagement = pd.read_csv(path, dtype=str).fillna("")
 
-    for _, row in merged.iterrows():
-        contact_vid = str(row.get("VId", "")).strip()
-        if not contact_vid:
-            print("⚠️ No contact vid in join record, skipping.")
-            skipped_rows += 1
-            continue
+        # Merge with aggregated join tables
+        df_merged = df_engagement.merge(df_contact_assoc, on="EngagementId", how="left") \
+                                 .merge(df_deal_assoc, on="EngagementId", how="left") \
+                                 .merge(df_company_assoc, on="EngagementId", how="left")
 
-        contact_id = contacts.get(contact_vid)
-        if not contact_id:
-            print(f"⚠️ Contact not found for vid {contact_vid}, skipping.")
-            skipped_rows += 1
-            continue
+        # Apply per-type limit
+        if limit:
+            df_merged = df_merged.head(limit)
 
-        engagement_type = row['engagement_type'].strip().lower()
-        match engagement_type:
-            case "call":
-                activity_doc = {
-                    "type": row.get("hs_activity_type", "Call").strip(),
-                    "contact": contact_id,
-                    "author": row.get("hs_created_by_user_id", None),
-                    "subject": row.get("hs_call_title", row.get("hs_call_summary", "")).strip(),
-                    "content": row.get("hs_call_body", "").strip(),
-                    "status": row.get("hs_call_status", "Completed").strip(),
-                    "dueDate": parse_date(row.get("hs_createdate")),
-                    "externalId": row.get("EngagementId"),
-                    "source": "HubSpot",
-                    "metadata": {
-                        "duration": row.get("hs_call_duration"),
-                        "direction": row.get("hs_call_direction"),
-                        "disposition": row.get("hs_call_disposition"),
-                        "recordingUrl": row.get("hs_call_recording_url"),
-                        "fromNumber": row.get("hs_call_from_number"),
-                        "toNumber": row.get("hs_call_to_number"),
-                        "location": row.get("hs_call_location"),
-                        "externalId": row.get("hs_call_unique_external_id"),
-                        "createdBy": row.get("hs_created_by"),
-                        "lastModified": parse_date(row.get("hs_lastmodifieddate")),
-                    }
-                }
-            case "meeting":
-                activity_doc = {
-                    "type": row.get("hs_activity_type", "MEETING").strip(),   
-                    "contact": contact_id,                                 
-                    "author": row.get("hs_created_by_user_id", None),          
-                    "subject": row.get("hs_meeting_title", "").strip(),       
-                    "content": row.get("hs_meeting_body", "").strip(),         
-                    "status": row.get("hs_meeting_outcome", "Scheduled").strip(), 
-                    "dueDate": parse_date(row.get("hs_meeting_start_time")),  
-                    "endDate": parse_date(row.get("hs_meeting_end_time")),  
-                    "externalId": row.get("EngagementId"),   
-                    "source": "HubSpot",
-                    "metadata": {
-                        "engagementId": row.get("EngagementId"),
-                        "vid": row.get("vid"),
-                        "objectId": row.get("hs_object_id"),
-                        "iCalUid": row.get("hs_i_cal_uid"),
-                        "guests": row.get("hs_guest_emails"),
-                        "videoUrl": row.get("hs_video_conference_url"),
-                        "videoPlatform": row.get("hs_video_conference_platform"),
-                        "location": row.get("hs_meeting_location"),
-                        "locationType": row.get("hs_meeting_location_type"),
-                        "sourceId": row.get("hs_meeting_source_id"),
-                        "source": row.get("hs_meeting_source"),
-                        "createdBy": row.get("hs_created_by_user_id"),
-                        "lastModified": parse_date(row.get("hs_lastmodifieddate")),
-                        "internalNotes": row.get("hs_internal_meeting_notes"),
-                        "bookingInstanceId": row.get("hs_booking_instance_id"),
-                        "campaignGuid": row.get("hs_campaign_guid"),
-                        "followUpAction": row.get("hs_follow_up_action"),
-                        "followUpContext": row.get("hs_follow_up_context"),
-                        "scheduledTasks": row.get("hs_scheduled_tasks"),
-                        "attendanceDuration": row.get("hs_notetaker_attendance_duration"),
-                        "timezone": row.get("hs_timezone"),
-                        "allOwnerIds": row.get("hs_all_owner_ids"),
-                        "allTeamIds": row.get("hs_all_team_ids"),
-                        "assignedBusinessUnits": row.get("hs_all_assigned_business_unit_ids"),
-                        "accessibleTeamIds": row.get("hs_all_accessible_team_ids"),
-                    }
-                }
-            case "email":
-                activity_doc = {
-                    "type": row.get("hs_activity_type", "EMAIL").strip(),          
-                    "contact": contact_id,                                      
-                    "author": row.get("hs_created_by_user_id", None),               
-                    "subject": row.get("hs_email_subject", "").strip(),            
-                    "content": row.get("hs_body_preview", "").strip(),            
-                    "status": row.get("hs_email_status", "Sent").strip(),           
-                    "dueDate": parse_date(row.get("hs_createdate")),  
-                    "externalId": row.get("EngagementId"),              
-                    "source": "HubSpot",
-                    "metadata": {
-                        "vid": row.get("vid"),
-                        "objectId": row.get("hs_object_id"),
-                        "direction": row.get("hs_email_direction"),
-                        "fromEmail": row.get("hs_email_from_email"),
-                        "fromName": f"{row.get('hs_email_from_firstname', '')} {row.get('hs_email_from_lastname', '')}".strip(),
-                        "toEmails": row.get("hs_email_to_email"),
-                        "toNames": f"{row.get('hs_email_to_firstname', '')} {row.get('hs_email_to_lastname', '')}".strip(),
-                        "ccEmails": row.get("hs_email_cc_email"),
-                        "bccEmails": row.get("hs_email_bcc_email"),
-                        "openCount": row.get("hs_email_open_count"),
-                        "clickCount": row.get("hs_email_click_count"),
-                        "replyCount": row.get("hs_email_reply_count"),
-                        "threadId": row.get("hs_email_thread_id"),
-                        "threadSummary": row.get("hs_email_thread_summary"),
-                        "sendEventId": row.get("hs_email_send_event_id"),
-                        "postSendStatus": row.get("hs_email_post_send_status"),
-                        "mediaProcessingStatus": row.get("hs_email_media_processing_status"),
-                        "messageId": row.get("hs_email_message_id"),
-                        "engagementSource": row.get("hs_engagement_source"),
-                        "lastModified": parse_date(row.get("hs_lastmodifieddate")),
-                        "createdBy": row.get("hs_created_by_user_id"),
-                        "sourceId": row.get("hs_engagement_source_id"),
-                        "externalId": row.get("hs_object_id"),
-                        "allOwnerIds": row.get("hs_all_owner_ids"),
-                        "allTeamIds": row.get("hs_all_team_ids"),
-                        "accessibleTeamIds": row.get("hs_all_accessible_team_ids"),
-                        "assignedBusinessUnits": row.get("hs_all_assigned_business_unit_ids"),
-                        "internalNotes": row.get("hs_email_details"),
-                        "readOnly": row.get("hs_read_only"),
-                    }
-                }
-            case "note":
-                activity_doc = {
-                    "type": row.get("hs_activity_type", "NOTE").strip(),  
-                    "contact": contact_id,                             
-                    "author": row.get("hs_created_by_user_id", None),       
-                    "subject": None,                                        
-                    "content": row.get("hs_note_body", "").strip(),         
-                    "status": "Completed",                                  
-                    "dueDate": parse_date(row.get("hs_createdate")),  
-                    "externalId": row.get("EngagementId"),      
-                    "source": "HubSpot",
-                    "metadata": {
-                        "vid": row.get("vid"),
-                        "objectId": row.get("hs_object_id"),
-                        "internalNotes": row.get("hs_note_body"),
-                        "allOwnerIds": row.get("hs_all_owner_ids"),
-                        "allTeamIds": row.get("hs_all_team_ids"),
-                        "accessibleTeamIds": row.get("hs_all_accessible_team_ids"),
-                        "assignedBusinessUnits": row.get("hs_all_assigned_business_unit_ids"),
-                        "attachments": row.get("hs_attachment_ids"),
-                        "lastModified": parse_date(row.get("hs_lastmodifieddate")),
-                        "createdBy": row.get("hs_created_by_user_id"),
-                        "engagementSource": row.get("hs_engagement_source"),
-                        "sourceId": row.get("hs_engagement_source_id"),
-                        "readOnly": row.get("hs_read_only"),
-                        "sharedTeams": row.get("hs_shared_team_ids"),
-                        "sharedUsers": row.get("hs_shared_user_ids"),
-                        "productName": row.get("hs_product_name"),
-                        "queueMembershipIds": row.get("hs_queue_membership_ids"),
-                        "objCoords": row.get("hs_obj_coords"),
-                        "mergedObjectIds": row.get("hs_merged_object_ids"),
-                        "updatedBy": row.get("hs_updated_by_user_id"),
-                    }
-                }
-            case "task":
-                activity_doc = {
-                    "type": row.get("hs_activity_type", "TASK").strip(),    
-                    "contact": contact_id,                                   
-                    "author": row.get("hs_created_by_user_id", None),            
-                    "subject": row.get("hs_task_subject", "").strip(),           
-                    "content": row.get("hs_task_body", "").strip(),              
-                    "status": "Completed" if row.get("hs_task_is_completed") == "true" else "Pending", 
-                    "dueDate": parse_date(row.get("hs_start_date")),
-                    "externalId": row.get("EngagementId"),             
-                    "source": "HubSpot",
-                    "metadata": {
-                        "vid": row.get("vid"),
-                        "objectId": row.get("hs_object_id"),
-                        "pipeline": row.get("hs_pipeline"),
-                        "pipelineStage": row.get("hs_pipeline_stage"),
-                        "taskType": row.get("hs_task_type"),
-                        "taskCategory": row.get("hs_marketing_task_category"),
-                        "taskCategoryId": row.get("hs_marketing_task_category_id"),
-                        "priority": row.get("hs_task_priority"),
-                        "probabilityToComplete": row.get("hs_task_probability_to_complete"),
-                        "repeatStatus": row.get("hs_repeat_status"),
-                        "scheduledTasks": row.get("hs_scheduled_tasks"),
-                        "reminders": row.get("hs_task_reminders"),
-                        "relativeReminders": row.get("hs_task_relative_reminders"),
-                        "allOwnerIds": row.get("hs_all_owner_ids"),
-                        "allTeamIds": row.get("hs_all_team_ids"),
-                        "accessibleTeamIds": row.get("hs_all_accessible_team_ids"),
-                        "assignedBusinessUnits": row.get("hs_all_assigned_business_unit_ids"),
-                        "attachments": row.get("hs_attachment_ids"),
-                        "lastModified": parse_date(row.get("hs_lastmodifieddate")),
-                        "createdBy": row.get("hs_created_by_user_id"),
-                        "engagementSource": row.get("hs_engagement_source"),
-                        "sourceId": row.get("hs_engagement_source_id"),
-                        "readOnly": row.get("hs_read_only"),
-                        "sharedTeams": row.get("hs_shared_team_ids"),
-                        "sharedUsers": row.get("hs_shared_user_ids"),
-                        "productName": row.get("hs_product_name"),
-                        "queueMembershipIds": row.get("hs_queue_membership_ids"),
-                        "objCoords": row.get("hs_obj_coords"),
-                        "mergedObjectIds": row.get("hs_merged_object_ids"),
-                        "updatedBy": row.get("hs_updated_by_user_id"),
-                        "wasImported": row.get("hs_was_imported"),
-                        "teamId": row.get("hubspot_team_id"),
-                        "ownerId": row.get("hubspot_owner_id"),
-                    }
-                }
-            case _:
-                print(f"⚠️ Unknown engagement type '{engagement_type}', skipping.")
+        for _, row in df_merged.iterrows():
+            # Map external IDs to Mongo IDs
+            contact_ids = map_ids(row.get("VId"), contacts)
+            process_ids = map_ids(row.get("DealId"), processes)
+            company_ids = map_ids(row.get("CompanyId"), companies)
+
+            if not contact_ids and not process_ids and not company_ids:
                 skipped_rows += 1
                 continue
 
-        operations.append(UpdateOne({"externalId": row.get("EngagementId")}, {"$set": activity_doc}, upsert=True))
+            engagement_type = row.get('engagement_type', '').strip().lower()
 
+            # Base document
+            activity_doc = {
+                "contact": contact_ids or None,
+                "process": process_ids or None,
+                "company": company_ids or None,
+                "externalId": row.get("EngagementId"),
+                "source": "HubSpot",
+                "metadata": row.to_dict()
+            }
+
+            # Type-specific fields
+            match engagement_type:
+                case "call":
+                    activity_doc.update({
+                        "type": "call",
+                        "author": row.get("hs_created_by_user_id", None),
+                        "subject": row.get("hs_call_title", row.get("hs_call_summary", "")).strip(),
+                        "content": row.get("hs_call_body", "").strip(),
+                        "status": row.get("hs_call_status", "Completed").strip(),
+                        "dueDate": parse_date(row.get("hs_createdate"))
+                    })
+                case "meeting":
+                    activity_doc.update({
+                        "type": "meeting",
+                        "author": row.get("hs_created_by_user_id", None),
+                        "subject": row.get("hs_meeting_title", "").strip(),
+                        "content": row.get("hs_meeting_body", "").strip(),
+                        "status": row.get("hs_meeting_outcome", "Scheduled").strip(),
+                        "dueDate": parse_date(row.get("hs_meeting_start_time")),
+                        "endDate": parse_date(row.get("hs_meeting_end_time"))
+                    })
+                case "email":
+                    activity_doc.update({
+                        "type": "email",
+                        "author": row.get("hs_created_by_user_id", None),
+                        "subject": row.get("hs_email_subject", "").strip(),
+                        "content": row.get("hs_body_preview", "").strip(),
+                        "status": row.get("hs_email_status", "Sent").strip(),
+                        "dueDate": parse_date(row.get("hs_createdate"))
+                    })
+                case "note":
+                    activity_doc.update({
+                        "type": "note",
+                        "author": row.get("hs_created_by_user_id", None),
+                        "subject": None,
+                        "content": row.get("hs_note_body", "").strip(),
+                        "status": "Completed",
+                        "dueDate": parse_date(row.get("hs_createdate"))
+                    })
+                case "task":
+                    activity_doc.update({
+                        "type": "task",
+                        "author": row.get("hs_created_by_user_id", None),
+                        "subject": row.get("hs_task_subject", "").strip(),
+                        "content": row.get("hs_task_body", "").strip(),
+                        "status": "Completed" if row.get("hs_task_is_completed") == "true" else "Pending",
+                        "dueDate": parse_date(row.get("hs_start_date"))
+                    })
+                case _:
+                    print(f"⚠️ Unknown engagement type '{engagement_type}', skipping.")
+                    skipped_rows += 1
+                    continue
+
+            operations.append(UpdateOne(
+                {"externalId": row.get("EngagementId")},
+                {"$set": activity_doc},
+                upsert=True
+            ))
+
+    # Write or dry run
     if dry_run:
         print(f"🧪 Dry run complete — {len(operations)} activities prepared, {skipped_rows} skipped.")
     else:
         if operations:
             print(f"🚀 Importing {len(operations)} activities to MongoDB...")
-            result = activities_collection.bulk_write(operations)
-            print(f"✅ {len(operations)} activities inserted successfully.")
-            print(f"⚙️ Skipped: {skipped_rows}")
+            activities_collection.bulk_write(operations)
+            print(f"✅ Activities imported. Skipped: {skipped_rows}")
         else:
-            print("⚠️ No valid activities to import.")
+            print("⚠️ No valid activities found.")
+
+def map_ids(csv_value, mapping):
+    """
+    csv_value: scalar, list, or pandas Series/array of values from CSV
+    mapping: dict from externalId -> MongoDB _id
+    Returns a list of MongoDB _ids (empty list if nothing found)
+    """
+    ids = []
+
+    # Normalize to iterable
+    if csv_value is None or (isinstance(csv_value, float) and pd.isna(csv_value)):
+        return ids
+    if isinstance(csv_value, (list, pd.Series, pd.Index, np.ndarray)):
+        values = csv_value
+    else:
+        values = [csv_value]
+
+    for v in values:
+        if v is None or (isinstance(v, float) and pd.isna(v)):
+            continue
+        try:
+            key = str(int(v))
+        except (ValueError, TypeError):
+            key = str(v)
+        obj_id = mapping.get(key)
+        if obj_id:
+            ids.append(obj_id)
+
+    return ids

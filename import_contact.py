@@ -2,19 +2,20 @@ import os
 import pandas as pd
 from pymongo import MongoClient, UpdateOne
 from normalize import normalize_email, normalize_phone, parse_date, normalize_bool
+from paths import CONTACT_CSV
 
-def import_contact(csv_path="./data/Contact.csv", limit = None, dry_run = False):
-    if not os.path.exists(csv_path):
-        raise FileNotFoundError(f"CSV file not found: {csv_path}")
-    print(f"Loading CSV from {csv_path}...")
-    df = pd.read_csv(csv_path, dtype=str).fillna("")
+def import_contact(limit = None, dry_run = False):
+    if not os.path.exists(CONTACT_CSV):
+        raise FileNotFoundError(f"CSV file not found: {CONTACT_CSV}")
+    print(f"Loading CSV from {CONTACT_CSV}...")
+    df = pd.read_csv(CONTACT_CSV, dtype=str).fillna("")
 
     if limit:
         df = df.head(limit)
 
     client = MongoClient(os.getenv("MONGODB"))
     db = client[os.getenv("DB_NAME")]
-    contacts = db["contacts"]
+    contacts = db["contact"]
 
     operations = []
     skipped_rows = 0
