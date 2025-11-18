@@ -1,15 +1,15 @@
 # 🧩 Savvy Import
 
 A command-line tool for importing HubSpot export CSV data into MongoDB.  
-Supports importing **Contacts** and **Activity records** (Calls, Emails, Meetings, Notes), and linking activities to contacts via join tables.
+Supports importing **Contacts**, **Processes**, **Companies**, **Cohorts**, and **Activity records** (Calls, Emails, Meetings, Notes, Tasks), linking activities to contacts, companies, and deals/processes via join tables.
 
 ---
 
 ## 🚀 Features
 
-- Import HubSpot **Contacts** from CSV
-- Import **Activities** (Calls, Emails, Meetings, Notes)
-- Automatically joins activity data with contact associations using a join CSV
+- Import HubSpot **Contacts**, **Companies**, **Processes**, and **Cohorts** from CSV
+- Import **Activities** (Calls, Emails, Meetings, Notes, Tasks)
+- Automatically joins activity data with **Contacts**, **Companies**, and **Processes** using association CSVs
 - Optional `--dry-run` mode for testing without writing to MongoDB
 - Limit records processed using `--limit`
 - Modular and extensible — add new data importers easily
@@ -52,24 +52,30 @@ Supports importing **Contacts** and **Activity records** (Calls, Emails, Meeting
 ## 📁 Data Folder Structure
 
 All import CSV files should be placed in a `data/` folder in the project directory:
-
 ```
 savvyImport/
 ├── data/
 │   ├── Contacts.csv
+│   ├── Companies.csv
+│   ├── Deal.csv
+│   ├── DealCohortsAssociations.csv
 │   ├── EngagementCall.csv
 │   ├── EngagementEmail.csv
-│   ├── EngagementNote.csv
 │   ├── EngagementMeeting.csv
+│   ├── EngagementNote.csv
+│   ├── EngagementTask.csv
 │   ├── EngagementContactAssociations.csv
-│   └── merged_preview.csv   # (optional debug output)
+│   ├── EngagementCompanyAssociations.csv
+│   └── EngagementDealAssociations.csv
 ├── import_contact.py
 ├── import_activity.py
+├── import_cohort.py
+├── import_company.py
+├── import_process.py
+├── paths.py
 ├── main.py
 └── ...
 ```
-
----
 
 ## 🧰 Usage
 
@@ -78,65 +84,77 @@ savvyImport/
 Imports contacts from a HubSpot export file.
 
 ```bash
-python main.py contacts --path ./data/Contacts.csv
+python main.py contact
 ```
 
 **Dry-run example (no DB writes):**
 ```bash
-python main.py contacts --path ./data/Contacts.csv --dry-run --limit 10
+python main.py contact --dry-run --limit 10
 ```
 
 ---
 
 ### Import Activities
 
-Activities (Calls, Emails, Meetings, Notes) require a **join file** that associates each engagement with a contact `VId`.
+Activities (Calls, Emails, Meetings, Notes) require **join files** identified in paths.py that associates each engagement with a contact `VId`.
 
 **Example:**
 ```bash
-python main.py activities   --path ./data/EngagementEmail.csv   --join ./data/EngagementContactAssociations.csv
+python main.py activity
 ```
-
-**Dry-run example:**
-```bash
-python main.py activities   --path ./data/EngagementCall.csv   --join ./data/EngagementContactAssociations.csv   --dry-run --limit 5
-```
-
-You can use this same command for:
-- `EngagementCall.csv`
-- `EngagementEmail.csv`
-- `EngagementMeeting.csv`
-- `EngagementNote.csv`
-
-
 ---
+
+### Import Processes, Companies, and Cohorts
+
+```
+python main.py process
+python main.py company
+python main.py cohort
+```
 
 ## ⚙️ CLI Options
 
-| Flag | Description | Example |
-|------|--------------|----------|
-| `--path` | Path to main CSV file | `--path ./data/EngagementEmail.csv` |
-| `--join` | Path to contact join CSV | `--join ./data/EngagementContactAssociations.csv` |
-| `--limit` | Limit number of records processed | `--limit 10` |
-| `--dry-run` | Run without writing to MongoDB | `--dry-run` |
+| Flag        | Description                       | Example                                               |
+| ----------- | --------------------------------- | ----------------------------------------------------- |
+| `command`   | Which import to run               | `contact`, `activity`, `process`, `company`, `cohort` |
+| `--limit`   | Limit number of records processed | `--limit 10`                                          |
+| `--dry-run` | Run without writing to MongoDB    | `--dry-run`                                           |
+
 
 ---
 
 ## 🧹 Example Workflow
 
 1. Import all contacts:
-   ```bash
-   python main.py contacts --path ./data/Contacts.csv
-   ```
 
-2. Test import of emails:
-   ```bash
-   python main.py activities --path ./data/EngagementEmail.csv --join ./data/EngagementContactAssociations.csv --dry-run --limit 10
-   ```
+```
+python main.py contact
+```
 
-3. If everything looks good, import the rest:
-   ```bash
-   python main.py activities --path ./data/EngagementEmail.csv --join ./data/EngagementContactAssociations.csv
-   ```
 
+2. Test import of activities (dry-run):
+```
+python main.py activity --dry-run --limit 10
+```
+
+3. Import activities fully:
+```
+python main.py activity
+```
+
+4. Import processes:
+```
+python main.py process
+```
+
+5. Import companies:
+```
+python main.py company
+```
+
+6. Import cohorts:
+```
+python main.py cohort
+```
 ---
+
