@@ -61,6 +61,7 @@ def import_activity(limit=None, dry_run=False):
             company_ids = map_ids(row.get("CompanyId"), companies)
 
             if not contact_ids and not process_ids and not company_ids:
+                print(row.get("EngagementId"))
                 skipped_rows += 1
                 continue
 

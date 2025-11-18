@@ -58,9 +58,6 @@ def import_process(limit=None, dry_run=False):
         # Look up Mongo IDs
         contact_id = contacts.get(vid)
         cohort_id = cohorts.get(cohort_ext)
-
-        if not contact_id or not cohort_id:
-            continue
         
         traction = row.get("traction", "").strip()
         if traction not in TRACTION_LEVELS:
