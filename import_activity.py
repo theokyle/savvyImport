@@ -27,10 +27,10 @@ def import_activity(limit=None, dry_run=False):
     # Mongo setup
     client = MongoClient(os.getenv("MONGODB"))
     db = client[os.getenv("DB_NAME")]
-    contacts_collection = db["contact"]
-    companies_collection = db["company"]
-    processes_collection = db["process"]
-    activities_collection = db["activity"]
+    contacts_collection = db["contacts"]
+    companies_collection = db["companies"]
+    processes_collection = db["processes"]
+    activities_collection = db["activities"]
 
     # Preload DB objects
     contacts = {str(c["externalId"]): c["_id"] for c in contacts_collection.find({}, {"externalId": 1})}

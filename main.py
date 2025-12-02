@@ -8,6 +8,7 @@ from import_activity import import_activity
 from import_cohort import import_cohort
 from import_company import import_company
 from import_process import import_process
+from import_attachments import download_all_engagement_attachments
 
 # --- Prepare Bulk Updates ---
 def main():
@@ -46,6 +47,8 @@ def main():
             import_cohort(args.limit, args.dry_run)
         case "company":
             import_company(args.limit, args.dry_run)
+        case "attachment":
+            download_all_engagement_attachments(args.limit, args.dry_run)
 
 
 if __name__ == "__main__":

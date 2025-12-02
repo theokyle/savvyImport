@@ -25,9 +25,9 @@ def import_process(limit=None, dry_run=False):
     # --- Mongo setup ---
     client = MongoClient(os.getenv("MONGODB"))
     db = client[os.getenv("DB_NAME")]
-    process_collection = db["process"]
-    contact_collection = db["contact"]
-    cohort_collection = db["cohort"]
+    process_collection = db["processes"]
+    contact_collection = db["contacts"]
+    cohort_collection = db["cohorts"]
 
     # --- Preload contacts and cohorts ---
     print("⚡ Preloading contacts and cohorts from database...")

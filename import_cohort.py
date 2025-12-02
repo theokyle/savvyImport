@@ -30,7 +30,7 @@ def import_cohort(limit=None, dry_run=False):
 
     client = MongoClient(os.getenv("MONGODB"))
     db = client[os.getenv("DB_NAME")]
-    cohorts = db["cohort"]
+    cohorts = db["cohorts"]
 
     operations = []
     skipped = 0

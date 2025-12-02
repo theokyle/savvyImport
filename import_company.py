@@ -17,8 +17,8 @@ def import_company(limit=None, dry_run=False):
     # --- Mongo setup ---
     client = MongoClient(os.getenv("MONGODB"))
     db = client[os.getenv("DB_NAME")]
-    company_collection = db["company"]
-    contact_collection = db["contact"]
+    company_collection = db["companies"]
+    contact_collection = db["contacts"]
 
     # --- 🔥 Preload all contacts into memory (fast lookup) ---
     print("⚡ Preloading contacts from database...")

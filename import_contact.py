@@ -15,7 +15,7 @@ def import_contact(limit = None, dry_run = False):
 
     client = MongoClient(os.getenv("MONGODB"))
     db = client[os.getenv("DB_NAME")]
-    contacts = db["contact"]
+    contacts = db["contacts"]
 
     operations = []
     skipped_rows = 0
