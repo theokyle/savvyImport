@@ -61,7 +61,7 @@ def import_process(limit=None, dry_run=False):
         
         traction = row.get("traction", "").strip()
         if traction not in TRACTION_LEVELS:
-            traction = "Black"
+            traction = "Unknown"
 
         dealstage = str(row.get("dealstage"))
         stage_obj = DEALSTAGE_TO_STAGE.get(dealstage) or []

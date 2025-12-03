@@ -108,8 +108,9 @@ def download_attachment(file_id, save_dir="./attachments", dry_run=False):
             print(f"⚠ Failed to download file {file_id} from signed URL: {e}")
             return None
 
-        filename = attachment.get("name", f"{file_id}.pdf")
-        filepath = os.path.join(save_dir, filename)
+        filename = attachment.get("name", f"{file_id}")
+        extension = attachment.get("extension")
+        filepath = os.path.join(save_dir, f"{filename}.{extension}")
 
         with open(filepath, "wb") as f:
             f.write(file_data.content)
