@@ -2,8 +2,7 @@ import requests
 import os
 import pandas as pd
 from paths import ENGAGEMENT_PATHS
-from pymongo import MongoClient
-from collections import defaultdict
+from pymongo import MongoClient, UpdateOne
 
 
 def download_all_engagement_attachments(limit=None, dry_run=False):
@@ -22,6 +21,7 @@ def download_all_engagement_attachments(limit=None, dry_run=False):
     print(f"   → Loaded {len(activities)} activities")
 
     attachments = 0
+    file_objs_to_upsert = []
 
     for path in ENGAGEMENT_PATHS:
         print(f"📂 Checking {path}…")
@@ -55,13 +55,19 @@ def download_all_engagement_attachments(limit=None, dry_run=False):
                 continue
 
             for file_id in attachment_ids:
-                attachments += 1
-
                 file_obj = download_attachment(file_id, dry_run=dry_run)
+                if not file_obj:
+                    continue
 
-                save_attachment_to_db(file_obj, activity, dry_run)
+                # Attach activity/process/contact metadata
+                file_obj["activity"] = activity.get("_id")
+                file_obj["process"] = activity.get("process")
+                file_obj["contact"] = activity.get("contact")
 
-    print(f"✔ Done. Processed {attachments} attachments.")
+                file_objs_to_upsert.append(file_obj)
+                
+    save_attachments_batch(file_objs_to_upsert, dry_run=dry_run)
+    print(f"✔ Done. Processed {len(file_objs_to_upsert)} attachments.")
 
 
 def download_attachment(file_id, save_dir="./attachments", dry_run=False):
@@ -84,56 +90,72 @@ def download_attachment(file_id, save_dir="./attachments", dry_run=False):
     url = f"https://api.hubapi.com/files/v3/files/{file_id}/signed-url"
     headers = {"Authorization": f"Bearer {TOKEN}"}
 
-    r = requests.get(url, headers=headers)
-    r.raise_for_status()
+    try:
+        r = requests.get(url, headers=headers)
+        r.raise_for_status()
+        attachment = r.json()
+        signed_url = attachment.get("url")
 
-    attachment = r.json()
-    signed_url = attachment.get("url")
+        if not signed_url:
+            print(f"⚠ No signed URL for file {file_id}")
+            return None
 
-    if not signed_url:
-        print(f"No signed URL for file {file_id}")
+        # Download the actual file content
+        try:
+            file_data = requests.get(signed_url, allow_redirects=True)
+            file_data.raise_for_status()
+        except requests.RequestException as e:
+            print(f"⚠ Failed to download file {file_id} from signed URL: {e}")
+            return None
+
+        filename = attachment.get("name", f"{file_id}.pdf")
+        filepath = os.path.join(save_dir, filename)
+
+        with open(filepath, "wb") as f:
+            f.write(file_data.content)
+
+        print(f"Downloaded {filename}")
+        return {
+            "name": filename,
+            "path": filepath,
+            "size": attachment.get("size"),
+            "type": attachment.get("type", "DOCUMENT"),
+            "source": "Hubspot",
+            "externalId": file_id
+        }
+
+    except requests.RequestException as e:
+        print(f"⚠ Failed to get signed URL for file {file_id}: {e}")
         return None
 
-    file_data = requests.get(signed_url, allow_redirects=True)
-    file_data.raise_for_status()
 
-    filename = attachment.get("name", f"{file_id}.pdf")
-    filepath = os.path.join(save_dir, filename)
-
-    with open(filepath, "wb") as f:
-        f.write(file_data.content)
-
-    print(f"Downloaded {filename}")
-    return {
-        "name": filename,
-        "path": filepath,
-        "size": attachment.get("size"),
-        "type": attachment.get("type", "DOCUMENT"),
-        "source": "Hubspot",
-        "externalId": file_id
-    }
-
-
-def save_attachment_to_db(file_obj, activity, dry_run=False):
-    if not file_obj:
+def save_attachments_batch(file_objs, dry_run=False):
+    if not file_objs:
         return
-
-    file_doc = file_obj.copy()
-    file_doc["activity"] = activity.get("_id")
-    file_doc["process"] = activity.get("process")
-    file_doc["contact"] = activity.get("contact")
 
     if dry_run:
+        print(f"[DRY-RUN] Total files: {len(file_objs)}")
         return
 
-    # ---- Real insert ----
     client = MongoClient(os.getenv("MONGODB"))
     db = client[os.getenv("DB_NAME")]
     file_collection = db["files"]
 
-    result = file_collection.insert_one(file_doc)
-    print(f"Inserted file with _id={result.inserted_id}")
-    return result.inserted_id
+    operations = []
+
+    for file_doc in file_objs:
+        operations.append(
+            UpdateOne(
+                {"externalId": file_doc["externalId"]},  # match key
+                {"$set": file_doc},                     # update fields
+                upsert=True                             # insert if not exists
+            )
+        )
+
+    if operations:
+        result = file_collection.bulk_write(operations, ordered=False)
+        print(f"✔ Bulk upsert completed: {result.matched_count} matched, "
+              f"{result.upserted_count} inserted")
 
 
 

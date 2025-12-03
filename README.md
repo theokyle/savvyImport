@@ -1,7 +1,7 @@
 # 🧩 Savvy Import
 
 A command-line tool for importing HubSpot export CSV data into MongoDB.  
-Supports importing **Contacts**, **Processes**, **Companies**, **Cohorts**, and **Activity records** (Calls, Emails, Meetings, Notes, Tasks), linking activities to contacts, companies, and deals/processes via join tables.
+Supports importing **Contacts**, **Processes**, **Companies**, **Cohorts**, **Attachments** and **Activity records** (Calls, Emails, Meetings, Notes, Tasks, Files), linking activities to contacts, companies, and deals/processes via join tables.
 
 ---
 
@@ -112,6 +112,12 @@ python main.py company
 python main.py cohort
 ```
 
+### Import Files and Download Attachments
+
+```
+python main.py attachment
+```
+
 ## ⚙️ CLI Options
 
 | Flag        | Description                       | Example                                               |
@@ -156,5 +162,9 @@ python main.py company
 ```
 python main.py cohort
 ```
----
 
+7. Import and Download Attachments
+```
+python main.py attachment
+```
+---
