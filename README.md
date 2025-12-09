@@ -137,15 +137,14 @@ python main.py attachment
 python main.py contact
 ```
 
+2. Import companies:
+```
+python main.py company
+```
 
-2. Test import of activities (dry-run):
+3. Import cohorts:
 ```
-python main.py activity --dry-run --limit 10
-```
-
-3. Import activities fully:
-```
-python main.py activity
+python main.py cohort
 ```
 
 4. Import processes:
@@ -153,17 +152,12 @@ python main.py activity
 python main.py process
 ```
 
-5. Import companies:
+5. Import activities:
 ```
-python main.py company
-```
-
-6. Import cohorts:
-```
-python main.py cohort
+python main.py activity
 ```
 
-7. Import and Download Attachments
+6. Import and Download Attachments
 ```
 python main.py attachment
 ```
