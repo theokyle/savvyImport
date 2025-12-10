@@ -3,6 +3,9 @@
 # Contact
 CONTACT_CSV = "./data/Contact.csv"
 
+# Contact Cohort Association
+CONTACT_COHORT_CSV = "./data/ContactCohortsAssociations.csv"
+
 #Process
 PROCESS_CSV = "./data/Deal.csv"
 PROCESS_JOIN_PATHS = ["./data/ContactDealAssociations.csv", "./data/DealCohortsAssociations.csv"]

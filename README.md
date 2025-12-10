@@ -147,17 +147,22 @@ python main.py company
 python main.py cohort
 ```
 
-4. Import processes:
+4. Import Contact/Cohort Associations:
+```
+python main.py contact-cohort
+```
+
+5. Import processes:
 ```
 python main.py process
 ```
 
-5. Import activities:
+6. Import activities:
 ```
 python main.py activity
 ```
 
-6. Import and Download Attachments
+7. Import and Download Attachments
 ```
 python main.py attachment
 ```
