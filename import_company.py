@@ -3,6 +3,7 @@ import pandas as pd
 from pymongo import MongoClient, UpdateOne
 from normalize import normalize_phone, parse_date
 from paths import COMPANY_CSV, COMPANY_JOIN_PATHS
+from constants import OWNER_ID_TO_CONTACT_ID
 
 def import_company(limit=None, dry_run=False):
     path = COMPANY_CSV
@@ -52,6 +53,9 @@ def import_company(limit=None, dry_run=False):
 
         contact_object_ids = company_contact_map.get(company_id, [])
 
+        hs_owner_id = row.get("hs_all_owner_ids", "").strip()
+        assignedTo = OWNER_ID_TO_CONTACT_ID.get(hs_owner_id)
+
         # --- Basic fields ---
         name = row.get("name") or row.get("website")
         if not name:
@@ -70,6 +74,7 @@ def import_company(limit=None, dry_run=False):
         # --- Build Company doc ---
         company_doc = {
             "name": name,
+            "assignedTo": assignedTo,
             "website": row.get("website"),
             "industry": row.get("industry"),
             "description": row.get("description"),

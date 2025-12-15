@@ -1,7 +1,8 @@
 import os
 import pandas as pd
 from pymongo import MongoClient, UpdateOne
-from constants import DEALSTAGE_TO_STAGE, TRACTION_LEVELS, OWNER_TO_EMAIL
+from bson import ObjectId
+from constants import DEALSTAGE_TO_STAGE, TRACTION_LEVELS, OWNER_ID_TO_CONTACT_ID
 from paths import PROCESS_CSV, PROCESS_JOIN_PATHS
 
 def import_process(limit=None, dry_run=False):
@@ -66,21 +67,20 @@ def import_process(limit=None, dry_run=False):
         dealstage = str(row.get("dealstage"))
         stage_obj = DEALSTAGE_TO_STAGE.get(dealstage) or []
         if stage_obj:
-            stage_obj["_id"] = dealId
+            stage_obj["_id"] = ObjectId()
 
         owner_id = row.get("hs_all_owner_ids", "").strip()
-        email = OWNER_TO_EMAIL.get(owner_id)
-        assigned_to_contact_id = contacts.get(email)
+        assignedTo = OWNER_ID_TO_CONTACT_ID.get(owner_id)
 
 
         process_doc = {
             "name": process_name.strip(),
-            "assignedTo": assigned_to_contact_id,
+            "assignedTo": assignedTo,
             "contact": contact_id,
             "cohort": cohort_id,
             "traction": traction,
             "stages": [stage_obj] if stage_obj else [],
-            "currentStage": dealId,
+            "currentStage": stage_obj["_id"] if stage_obj else None,
             "externalId": dealId,
             "source": "hubspot",
             "reason": row.get("reason", "").strip() or None,
@@ -88,7 +88,7 @@ def import_process(limit=None, dry_run=False):
 
         operations.append(
             UpdateOne(
-                {"externalId": row.get("dealId")},  # or use externalId if you track it
+                {"externalId": row.get("DealId")},  # or use externalId if you track it
                 {"$set": process_doc},
                 upsert=True,
             )

@@ -1,3 +1,5 @@
+from bson import ObjectId
+
 # DEALSTAGE_TO_LABEL = {
 #     # Pipeline 81041244
 #     "163394135": "Wait List",
@@ -17,6 +19,14 @@
 #     "174822200": "Closed lost",
 #     "174822199": "Closed won",
 # }
+
+OWNER_ID_TO_CONTACT_ID = {
+    "84379854": ObjectId("693c2d632ad755420b481458"),  # Kyle Butler
+    "554259518": ObjectId("655bd3f1278a3f80408a1605"),  # Matt Thomas
+    "737334862": ObjectId("665a43ea82fd0900446b2521"),  # Stephanie Grimshaw
+    "737334863": ObjectId("693a009c9ca1c01d0fe11789"),  # Justin Treadwell
+    "739743375": ObjectId("693c21042ad755420b481432"),  # Laurie Wilson
+}
 
 DEALSTAGE_TO_STAGE = {
     "163394135": {"value": "Waitlist", "label": "Waitlist", "sortOrder": 2, "reasonRequired": False},
