@@ -21,7 +21,7 @@ def import_contact(limit=None, dry_run=False):
     print("⚡ Preloading deal funding info...")
     deal_funding = {
         row["DealId"]: {
-            "fundingPartner": row.get("approved_funding_partner", "").strip() or None,
+            "fundingProvider": row.get("approved_funding_partner", "").strip() or None,
             "fundingStatus": row.get("funding_status", "").strip() or None,
         }
         for _, row in df_deals.iterrows()
@@ -126,7 +126,7 @@ def transform_row(row, funding):
         "ethnicity": row.get("ethnicity", "").strip(),
         "veteranStatus": normalize_bool(row.get("veteran_status")),
         "externalId": row.get("VId", "").strip(),
-        "fundingPartner": funding.get("fundingPartner"),
+        "fundingProvider": funding.get("fundingProvider"),
         "fundingStatus": funding.get("fundingStatus"),
         "location": location,
         "active": True,
