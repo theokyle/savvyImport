@@ -34,7 +34,7 @@ def import_process(limit=None, dry_run=False):
     print("⚡ Preloading contacts and cohorts from database...")
     contacts = {
         str(c["externalId"]): c["_id"]
-        for c in contacts_collection.find({}, {"externalId": 1})
+        for c in contact_collection.find({}, {"externalId": 1})
         if c.get("externalId")  # Skip if externalId is missing or None
     }
     cohorts = {str(c["externalId"]): c["_id"] for c in cohort_collection.find({}, {"externalId": 1})}
@@ -68,10 +68,19 @@ def import_process(limit=None, dry_run=False):
         if traction not in TRACTION_LEVELS:
             traction = "Unknown"
 
-        dealstage = str(row.get("dealstage"))
-        stage_obj = DEALSTAGE_TO_STAGE.get(dealstage) or []
-        if stage_obj:
-            stage_obj["_id"] = ObjectId()
+        existing_process = process_collection.find_one({"externalId": dealId})
+        stages = existing_process.get("stages", []) if existing_process else []
+
+        # Find if stage already exists
+        stage_obj = DEALSTAGE_TO_STAGE.get(dealstage)
+        existing_stage = next((s for s in stages if s["value"] == stage_obj["value"]), None)
+
+        if existing_stage:
+            stage_id = existing_stage["_id"]
+        else:
+            stage_id = ObjectId()
+            stage_obj["_id"] = stage_id
+            stages.append(stage_obj)
 
         owner_id = row.get("hs_all_owner_ids", "").strip()
         assignedTo = OWNER_ID_TO_CONTACT_ID.get(owner_id)
@@ -83,8 +92,8 @@ def import_process(limit=None, dry_run=False):
             "contact": contact_id,
             "cohort": cohort_id,
             "traction": traction,
-            "stages": [stage_obj] if stage_obj else [],
-            "currentStage": stage_obj["_id"] if stage_obj else None,
+            "stages": stages,
+            "currentStage": stage_id,
             "externalId": dealId,
             "source": "hubspot",
             "reason": row.get("reason", "").strip() or None,
