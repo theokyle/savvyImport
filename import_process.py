@@ -1,5 +1,6 @@
 import os
 import pandas as pd
+import copy
 from pymongo import MongoClient, UpdateOne
 from bson import ObjectId
 from constants import DEALSTAGE_TO_STAGE, TRACTION_LEVELS, OWNER_ID_TO_CONTACT_ID
@@ -68,19 +69,17 @@ def import_process(limit=None, dry_run=False):
         if traction not in TRACTION_LEVELS:
             traction = "Unknown"
 
-        existing_process = process_collection.find_one({"externalId": dealId})
-        stages = existing_process.get("stages", []) if existing_process else []
-
-        # Find if stage already exists
+        dealstage = str(row.get("dealstage"))
         stage_obj = DEALSTAGE_TO_STAGE.get(dealstage)
-        existing_stage = next((s for s in stages if s["value"] == stage_obj["value"]), None)
-
-        if existing_stage:
-            stage_id = existing_stage["_id"]
-        else:
+        if stage_obj:
+            stage_copy = copy.deepcopy(stage_obj)
             stage_id = ObjectId()
-            stage_obj["_id"] = stage_id
-            stages.append(stage_obj)
+            stage_copy["_id"] = stage_id
+            stages = [stage_copy]
+            current_stage = stage_id
+        else:
+            stages = []
+            current_stage = None
 
         owner_id = row.get("hs_all_owner_ids", "").strip()
         assignedTo = OWNER_ID_TO_CONTACT_ID.get(owner_id)
@@ -93,7 +92,7 @@ def import_process(limit=None, dry_run=False):
             "cohort": cohort_id,
             "traction": traction,
             "stages": stages,
-            "currentStage": stage_id,
+            "currentStage": current_stage,
             "externalId": dealId,
             "source": "hubspot",
             "reason": row.get("reason", "").strip() or None,
