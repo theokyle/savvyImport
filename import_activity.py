@@ -33,7 +33,11 @@ def import_activity(limit=None, dry_run=False):
     activities_collection = db["activities"]
 
     # Preload DB objects
-    contacts = {str(c["externalId"]): c["_id"] for c in contacts_collection.find({}, {"externalId": 1})}
+    contacts = {
+        str(c["externalId"]): c["_id"]
+        for c in contacts_collection.find({}, {"externalId": 1})
+        if c.get("externalId")  # Skip if externalId is missing or None
+    }
     companies = {str(c["externalId"]): c["_id"] for c in companies_collection.find({}, {"externalId": 1})}
     processes = {str(p["externalId"]): p["_id"] for p in processes_collection.find({}, {"externalId": 1})}
 

@@ -25,7 +25,8 @@ def import_company(limit=None, dry_run=False):
     print("⚡ Preloading contacts from database...")
     contacts = {
         str(c["externalId"]): c["_id"]
-        for c in contact_collection.find({}, {"externalId": 1})
+        for c in contacts_collection.find({}, {"externalId": 1})
+        if c.get("externalId")  # Skip if externalId is missing or None
     }
     print(f"   → Loaded {len(contacts)} contacts")
 

@@ -32,7 +32,11 @@ def import_process(limit=None, dry_run=False):
 
     # --- Preload contacts and cohorts ---
     print("⚡ Preloading contacts and cohorts from database...")
-    contacts = {str(c["externalId"]): c["_id"] for c in contact_collection.find({}, {"externalId": 1})}
+    contacts = {
+        str(c["externalId"]): c["_id"]
+        for c in contacts_collection.find({}, {"externalId": 1})
+        if c.get("externalId")  # Skip if externalId is missing or None
+    }
     cohorts = {str(c["externalId"]): c["_id"] for c in cohort_collection.find({}, {"externalId": 1})}
     
     df_contact_join = pd.read_csv(join_files[0], dtype=str).fillna("")
