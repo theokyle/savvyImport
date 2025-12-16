@@ -113,7 +113,7 @@ def download_attachment(file_id, save_dir="./hubspot", dry_run=False, update=Fal
 
         filename = attachment.get("name", f"{file_id}")
         extension = attachment.get("extension")
-        filepath = os.path.join(save_dir, f"{filename}-{file_id}.{extension}")
+        filepath = f"{save_dir}/{filename}-{file_id}.{extension}"
 
         if not update:
             with open(filepath, "wb") as f:
