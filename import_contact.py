@@ -49,7 +49,7 @@ def import_contact(limit=None, dry_run=False):
 
     operations = []
     skipped = 0
-    funding_update = 0
+    age_update = 0
 
     # ----------------------------
     # Transform + upsert
@@ -59,9 +59,11 @@ def import_contact(limit=None, dry_run=False):
 
         deal_id = contact_to_deal.get(vid)
         funding = deal_funding.get(deal_id, {}) if deal_id else {}
+        age_range = row.get("age_group", "").strip()
+        if age_range:
+            age_update += 1
 
-        if funding:
-            funding_update += 1
+        
 
         doc = transform_row(row, funding)
 
@@ -78,7 +80,7 @@ def import_contact(limit=None, dry_run=False):
         )
 
     if dry_run:
-        print(f"🧪 Dry run — {len(operations)} upserts prepared, {skipped} skipped, {funding_update} updated funding.")
+        print(f"🧪 Dry run — {len(operations)} upserts prepared, {skipped} skipped, {age_update} updated age_range.")
         return
 
     if operations:
@@ -129,6 +131,7 @@ def transform_row(row, funding):
         "fundingProvider": funding.get("fundingProvider"),
         "fundingStatus": funding.get("fundingStatus"),
         "location": location,
+        "ageRange": row.get("age_group", "").strip(),
         "active": True,
         "deleted": False,
         "confirmed": False,
