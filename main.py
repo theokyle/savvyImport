@@ -35,6 +35,11 @@ def main():
         default=None,
         help="Limit the number of rows to import for testing"
     )
+    parser.add_argument(
+        "--update",
+        action="store_true",
+        help="Update database without downloading attachments"
+    )
 
     args = parser.parse_args()
 
@@ -50,7 +55,7 @@ def main():
         case "company":
             import_company(args.limit, args.dry_run)
         case "attachment":
-            download_all_engagement_attachments(args.limit, args.dry_run)
+            download_all_engagement_attachments(args.limit, args.dry_run, args.update)
         case "contact-cohort":
             import_contact_cohort_links(args.limit, args.dry_run)
         case "update":

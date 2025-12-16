@@ -5,7 +5,7 @@ from paths import ENGAGEMENT_PATHS
 from pymongo import MongoClient, UpdateOne
 
 
-def download_all_engagement_attachments(limit=None, dry_run=False):
+def download_all_engagement_attachments(limit=None, dry_run=False, update=False):
     print("📥 Searching engagement files for attachments...")
 
     # ⚡ Only load Mongo activities once
@@ -55,7 +55,7 @@ def download_all_engagement_attachments(limit=None, dry_run=False):
                 continue
 
             for file_id in attachment_ids:
-                file_obj = download_attachment(file_id, dry_run=dry_run)
+                file_obj = download_attachment(file_id, dry_run=dry_run, update=update)
                 if not file_obj:
                     continue
 
@@ -70,10 +70,11 @@ def download_all_engagement_attachments(limit=None, dry_run=False):
     print(f"✔ Done. Processed {len(file_objs_to_upsert)} attachments.")
 
 
-def download_attachment(file_id, save_dir="./hubspot", dry_run=False):
+def download_attachment(file_id, save_dir="./hubspot", dry_run=False, update=False):
     """ Returns a file object (real or simulated when dry_run=True). """
     TOKEN = os.getenv("HUBSPOT_API_KEY")
-    os.makedirs(save_dir, exist_ok=True)
+    if not update:
+        os.makedirs(save_dir, exist_ok=True)
 
     if dry_run:
         # print(f"[DRY-RUN] Would download attachment {file_id}")
@@ -101,19 +102,21 @@ def download_attachment(file_id, save_dir="./hubspot", dry_run=False):
             return None
 
         # Download the actual file content
-        try:
-            file_data = requests.get(signed_url, allow_redirects=True)
-            file_data.raise_for_status()
-        except requests.RequestException as e:
-            print(f"⚠ Failed to download file {file_id} from signed URL: {e}")
-            return None
+        if not update:
+            try:
+                file_data = requests.get(signed_url, allow_redirects=True)
+                file_data.raise_for_status()
+            except requests.RequestException as e:
+                print(f"⚠ Failed to download file {file_id} from signed URL: {e}")
+                return None
 
         filename = attachment.get("name", f"{file_id}")
         extension = attachment.get("extension")
         filepath = os.path.join(save_dir, f"{filename}-{file_id}.{extension}")
 
-        with open(filepath, "wb") as f:
-            f.write(file_data.content)
+        if not update:
+            with open(filepath, "wb") as f:
+                f.write(file_data.content)
 
         print(f"Downloaded {filepath}")
         return {
