@@ -65,7 +65,7 @@ def import_process(limit=None, dry_run=False):
         contact_id = contacts.get(vid)
         cohort_id = cohorts.get(cohort_ext)
         
-        traction = row.get("traction", "").strip()
+        traction = row.get("deal_traction", "").strip()
         if traction not in TRACTION_LEVELS:
             traction = "Unknown"
 
