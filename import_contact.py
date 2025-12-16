@@ -1,7 +1,7 @@
 import os
 import pandas as pd
 from pymongo import MongoClient, UpdateOne
-from normalize import normalize_email, normalize_phone, parse_date, normalize_bool
+from normalize import normalize_email, normalize_phone, parse_date, normalize_bool, normalize_source
 from constants import OWNER_ID_TO_CONTACT_ID
 from paths import CONTACT_CSV, PROCESS_CSV, PROCESS_JOIN_PATHS
 
@@ -137,5 +137,5 @@ def transform_row(row, funding):
         "deleted": False,
         "confirmed": False,
         "timezone": "America/Chicago",
-        "source": "HubSpot",
+        "source": normalize_source(row.get("referral_source", "").strip()) or "Hubspot",
     }

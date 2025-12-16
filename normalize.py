@@ -30,3 +30,11 @@ def normalize_bool(value):
     if isinstance(value, str):
         return value.strip().lower() in ["true", "yes", "1", "y"]
     return False
+
+def normalize_source(text):
+    if not text:
+        return text
+
+    # Replace hyphens with spaces, split into words, capitalize each
+    words = text.replace("-", " ").split()
+    return " ".join(word.capitalize() for word in words)
