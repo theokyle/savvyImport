@@ -38,8 +38,14 @@ def import_activity(limit=None, dry_run=False):
         for c in contacts_collection.find({}, {"externalId": 1})
         if c.get("externalId")  # Skip if externalId is missing or None
     }
-    companies = {str(c["externalId"]): c["_id"] for c in companies_collection.find({}, {"externalId": 1})}
-    processes = {str(p["externalId"]): p["_id"] for p in processes_collection.find({}, {"externalId": 1})}
+    companies = {
+        str(c["externalId"]): c["_id"] 
+        for c in companies_collection.find({}, {"externalId": 1})
+        if c.get("externalId")}
+    processes = {
+        str(p["externalId"]): p["_id"] 
+        for p in processes_collection.find({}, {"externalId": 1})
+        if p.get("externalId")}
 
     operations = []
     skipped_rows = 0
@@ -68,6 +74,11 @@ def import_activity(limit=None, dry_run=False):
                 print(row.get("EngagementId"))
                 skipped_rows += 1
                 continue
+            
+            engagement_id = row.get("EngagementId")
+            if not engagement_id:
+                skipped_rows += 1
+                continue
 
             engagement_type = row.get('engagement_type', '').strip().lower()
 
@@ -76,7 +87,7 @@ def import_activity(limit=None, dry_run=False):
                 "contact": contact_ids or None,
                 "process": process_ids or None,
                 "company": company_ids or None,
-                "externalId": row.get("EngagementId"),
+                "externalId": engagement_id,
                 "source": "HubSpot",
                 "metadata": row.to_dict()
             }
@@ -135,7 +146,7 @@ def import_activity(limit=None, dry_run=False):
                     continue
 
             operations.append(UpdateOne(
-                {"externalId": row.get("EngagementId")},
+                {"externalId": engagement_id},
                 {"$set": activity_doc},
                 upsert=True
             ))

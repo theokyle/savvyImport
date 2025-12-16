@@ -16,7 +16,8 @@ def download_all_engagement_attachments(limit=None, dry_run=False, update=False)
     print("🔍 Preloading activity metadata...")
     activities = {
         str(a["externalId"]): a
-        for a in activity_collection.find({}, {"externalId": 1, "process": 1, "contact": 1})
+        for a in activity_collection.find({}, {"_id": 1, "externalId": 1, "process": 1, "contact": 1})
+        if a.get("externalId")
     }
     print(f"   → Loaded {len(activities)} activities")
 

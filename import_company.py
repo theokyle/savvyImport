@@ -25,7 +25,7 @@ def import_company(limit=None, dry_run=False):
     print("⚡ Preloading contacts from database...")
     contacts = {
         str(c["externalId"]): c["_id"]
-        for c in contacts_collection.find({}, {"externalId": 1})
+        for c in contact_collection.find({}, {"externalId": 1})
         if c.get("externalId")  # Skip if externalId is missing or None
     }
     print(f"   → Loaded {len(contacts)} contacts")
@@ -43,7 +43,7 @@ def import_company(limit=None, dry_run=False):
     skipped = 0
 
     for _, row in df_company.iterrows():
-        company_id = (row.get("CompanyId")).strip()
+        company_id = str(row.get("CompanyId")).strip()
 
         if not company_id:
             skipped += 1
@@ -79,7 +79,11 @@ def import_company(limit=None, dry_run=False):
             "website": row.get("website"),
             "industry": row.get("industry"),
             "description": row.get("description"),
-            "numberOfEmployees": row["numberofemployees"],
+            "numberOfEmployees": (
+                int(row["numberofemployees"])
+                if row.get("numberofemployees", "").isdigit()
+                else None
+                ),
             "address": address,
             "phone": normalize_phone(row.get("phone")),
             "timezone": row.get("timezone"),
@@ -127,7 +131,7 @@ def import_company(limit=None, dry_run=False):
 
         operations.append(
             UpdateOne(
-                {"metadata.companyId": company_id},
+                {"externalId": company_id},
                 {"$set": company_doc},
                 upsert=True,
             )

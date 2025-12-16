@@ -26,12 +26,14 @@ def import_contact_cohort_links(limit=None, dry_run=False):
     contacts = {
         str(c["externalId"]): c  
         for c in contacts_col.find({}, {"externalId": 1, "graduationDate": 1})
+        if c.get("externalId")
     }
 
     print("   → Preloading cohorts...")
     cohorts = {
         str(c["externalId"]): c["_id"]
         for c in cohorts_col.find({}, {"externalId": 1})
+        if c.get("externalId")
     }
 
     ops = []
